@@ -299,3 +299,79 @@ export function sanitizeProject(project?: string): string | undefined {
   const trimmed = project?.trim();
   return trimmed ? trimmed.slice(0, 60) : undefined;
 }
+
+// Pomodoro phase advancement result
+export interface PomodoroAdvanceResult {
+  action: "completed" | "to-break" | "to-focus";
+  timer: ActiveTimer | null; // null when completed
+  message: string;
+  subtitle?: string;
+}
+
+/**
+ * Advance the Pomodoro to the next phase.
+ * - If in focus phase: increment completed blocks, switch to break or complete if last
+ * - If in break phase: switch back to focus
+ * Persists the updated timer state automatically.
+ */
+export async function advancePomodoroPhase(
+  timer: ActiveTimer,
+  options?: { skip?: boolean },
+): Promise<PomodoroAdvanceResult> {
+  if (!timer.pomodoro) {
+    throw new Error("NOT_A_POMODORO");
+  }
+
+  const pomodoro = timer.pomodoro;
+  const now = Date.now();
+
+  if (pomodoro.phase === "focus") {
+    const completedFocusBlocks = pomodoro.completedFocusBlocks + 1;
+    const isLastFocus = completedFocusBlocks >= pomodoro.cycles;
+
+    if (isLastFocus) {
+      // Pomodoro session complete - log and clear
+      const finishedTimer: ActiveTimer = {
+        ...timer,
+        pomodoro: { ...pomodoro, completedFocusBlocks },
+      };
+      await stopTimer(finishedTimer);
+      return {
+        action: "completed",
+        timer: null,
+        message: options?.skip ? "Focus skipped" : "Pomodoro complete",
+        subtitle: "Time to celebrate!",
+      };
+    }
+
+    // Switch to break
+    const updated: ActiveTimer = {
+      ...timer,
+      startedAt: now,
+      phasePausedMs: 0,
+      pomodoro: { ...pomodoro, completedFocusBlocks, phase: "break" },
+    };
+    await setActiveTimer(updated);
+    return {
+      action: "to-break",
+      timer: updated,
+      message: options?.skip ? "Skipped to break" : "Focus complete",
+      subtitle: "Break started",
+    };
+  }
+
+  // Break phase -> switch to focus
+  const updated: ActiveTimer = {
+    ...timer,
+    startedAt: now,
+    phasePausedMs: 0,
+    pomodoro: { ...pomodoro, phase: "focus" },
+  };
+  await setActiveTimer(updated);
+  return {
+    action: "to-focus",
+    timer: updated,
+    message: options?.skip ? "Skipped break" : "Break finished",
+    subtitle: "Back to focus",
+  };
+}

@@ -15,6 +15,7 @@ import {
   ActiveTimer,
   SessionLog,
   StartTimerPayload,
+  advancePomodoroPhase,
   buildSummary,
   formatClock,
   formatReadableDuration,
@@ -87,7 +88,18 @@ export default function MenuBarTimerCommand() {
       const phaseElapsed = tick - activeTimer.startedAt - (activeTimer.phasePausedMs ?? 0);
       const remaining = getPhaseDurationMs(activeTimer) - phaseElapsed;
       if (remaining <= 0) {
-        void advancePomodoroPhase(activeTimer, setActiveTimer, setHistory);
+        void (async () => {
+          const result = await advancePomodoroPhase(activeTimer);
+          if (result.action === "completed") {
+            setActiveTimer(null);
+            const updatedHistory = await getHistory();
+            setHistory(updatedHistory);
+            await showToast({ style: Toast.Style.Success, title: result.message, message: result.subtitle });
+          } else {
+            setActiveTimer(result.timer);
+            await showToast({ style: Toast.Style.Success, title: result.message, message: result.subtitle });
+          }
+        })();
       }
       return;
     }
@@ -143,7 +155,15 @@ export default function MenuBarTimerCommand() {
     if (!activeTimer?.pomodoro) {
       return;
     }
-    await advancePomodoroPhase(activeTimer, setActiveTimer, setHistory, { skip: true });
+    const result = await advancePomodoroPhase(activeTimer, { skip: true });
+    if (result.action === "completed") {
+      setActiveTimer(null);
+      const updatedHistory = await getHistory();
+      setHistory(updatedHistory);
+    } else {
+      setActiveTimer(result.timer);
+    }
+    await showToast({ style: Toast.Style.Success, title: result.message, message: result.subtitle });
   }, [activeTimer]);
 
   const handlePauseResume = useCallback(async () => {
@@ -220,11 +240,11 @@ export default function MenuBarTimerCommand() {
             accessory={
               activeTimer.mode === "pomodoro" && activeTimer.pomodoro
                 ? {
-                    tag: {
-                      value: `${activeTimer.pomodoro.completedFocusBlocks}/${activeTimer.pomodoro.cycles}`,
-                      color: Color.Green,
-                    },
-                  }
+                  tag: {
+                    value: `${activeTimer.pomodoro.completedFocusBlocks}/${activeTimer.pomodoro.cycles}`,
+                    color: Color.Green,
+                  },
+                }
                 : undefined
             }
             tooltip={buildActiveTimerTooltip(activeTimer, tick)}
@@ -374,61 +394,7 @@ async function finalizeTimer(
   }
 }
 
-async function advancePomodoroPhase(
-  timer: ActiveTimer,
-  updateTimer: React.Dispatch<React.SetStateAction<ActiveTimer | null>>,
-  pushHistory: React.Dispatch<React.SetStateAction<SessionLog[]>>,
-  options?: { skip?: boolean },
-) {
-  if (!timer.pomodoro) {
-    return;
-  }
-
-  const pomodoro = timer.pomodoro;
-
-  if (pomodoro.phase === "focus") {
-    const completedFocusBlocks = pomodoro.completedFocusBlocks + 1;
-    const isLastFocus = completedFocusBlocks >= pomodoro.cycles;
-
-    if (isLastFocus) {
-      const finishedTimer: ActiveTimer = {
-        ...timer,
-        pomodoro: { ...pomodoro, completedFocusBlocks },
-      };
-      await finalizeTimer(finishedTimer, updateTimer, pushHistory, {
-        title: options?.skip ? "Focus skipped" : "Pomodoro complete",
-        message: "Time to celebrate!",
-        style: Toast.Style.Success,
-      });
-      return;
-    }
-
-    updateTimer({
-      ...timer,
-      startedAt: Date.now(),
-      phasePausedMs: 0,
-      pomodoro: { ...pomodoro, completedFocusBlocks, phase: "break" },
-    });
-    await showToast({
-      style: Toast.Style.Success,
-      title: options?.skip ? "Skipped to break" : "Focus complete",
-      message: "Break started",
-    });
-    return;
-  }
-
-  updateTimer({
-    ...timer,
-    startedAt: Date.now(),
-    phasePausedMs: 0,
-    pomodoro: { ...pomodoro, phase: "focus" },
-  });
-  await showToast({
-    style: Toast.Style.Success,
-    title: options?.skip ? "Skipped break" : "Break finished",
-    message: "Back to focus",
-  });
-}
+// advancePomodoroPhase is now imported from timer-store.ts
 
 function getPhaseDurationMs(timer: ActiveTimer): number {
   if (timer.mode === "pomodoro" && timer.pomodoro) {
