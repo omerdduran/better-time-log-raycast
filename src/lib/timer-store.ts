@@ -1,0 +1,301 @@
+import { LocalStorage } from "@raycast/api";
+import { randomUUID } from "node:crypto";
+
+export const STORAGE_KEYS = {
+  ACTIVE: "better-time-log/active-timer",
+  HISTORY: "better-time-log/history",
+};
+
+export const MAX_HISTORY_ITEMS = 20;
+
+export type TimerMode = "open" | "pomodoro";
+export type TimerPhase = "focus" | "break";
+
+export interface PomodoroState {
+  focusDurationMs: number;
+  breakDurationMs: number;
+  cycles: number;
+  completedFocusBlocks: number;
+  phase: TimerPhase;
+}
+
+export interface ActiveTimer {
+  id: string;
+  title: string;
+  project?: string;
+  createdAt: number;
+  startedAt: number;
+  mode: TimerMode;
+  targetDurationMs?: number;
+  pomodoro?: PomodoroState;
+  // Pause/Resume support
+  isPaused?: boolean;
+  pausedAt?: number;
+  sessionPausedMs?: number;
+  phasePausedMs?: number;
+}
+
+export interface SessionLog {
+  id: string;
+  title: string;
+  project?: string;
+  startedAt: number;
+  endedAt: number;
+  durationMs: number;
+  mode: TimerMode;
+  pomodoroCycles?: number;
+}
+
+export interface StartTimerPayload {
+  title?: string;
+  project?: string;
+  mode: TimerMode;
+  targetDurationMinutes?: number;
+  pomodoro?: {
+    focusMinutes: number;
+    breakMinutes: number;
+    cycles: number;
+  };
+}
+
+export async function getActiveTimer(): Promise<ActiveTimer | null> {
+  const raw = await LocalStorage.getItem<string>(STORAGE_KEYS.ACTIVE);
+  if (!raw) {
+    return null;
+  }
+  const parsed = safeParse<ActiveTimer>(raw);
+  if (!parsed) {
+    await LocalStorage.removeItem(STORAGE_KEYS.ACTIVE);
+  }
+  return parsed;
+}
+
+export async function setActiveTimer(timer: ActiveTimer | null): Promise<void> {
+  if (timer) {
+    await LocalStorage.setItem(STORAGE_KEYS.ACTIVE, JSON.stringify(timer));
+  } else {
+    await LocalStorage.removeItem(STORAGE_KEYS.ACTIVE);
+  }
+}
+
+export async function getHistory(): Promise<SessionLog[]> {
+  const raw = await LocalStorage.getItem<string>(STORAGE_KEYS.HISTORY);
+  if (!raw) {
+    return [];
+  }
+  const parsed = safeParse<SessionLog[]>(raw);
+  if (!parsed) {
+    await LocalStorage.removeItem(STORAGE_KEYS.HISTORY);
+    return [];
+  }
+  return parsed;
+}
+
+export async function setHistory(history: SessionLog[]): Promise<void> {
+  await LocalStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
+}
+
+export async function assignProjectToActiveTimer(project?: string): Promise<ActiveTimer> {
+  const timer = await getActiveTimer();
+  if (!timer) {
+    throw new Error("NO_ACTIVE_TIMER");
+  }
+  const updated: ActiveTimer = {
+    ...timer,
+    project: sanitizeProject(project),
+  };
+  await setActiveTimer(updated);
+  return updated;
+}
+
+export async function cancelActiveTimer(): Promise<void> {
+  await setActiveTimer(null);
+}
+
+export function formatClock(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const pad = (value: number) => value.toString().padStart(2, "0");
+  if (hours > 0) {
+    return `${hours}:${pad(minutes)}:${pad(seconds)}`;
+  }
+  return `${minutes}:${pad(seconds)}`;
+}
+
+export function formatReadableDuration(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+  return `${seconds}s`;
+}
+
+export function buildSummary(entry: SessionLog): string {
+  const project = entry.project ? ` · ${entry.project}` : "";
+  const label = entry.mode === "pomodoro" ? "Pomodoro" : "Timer";
+  const cycles =
+    entry.mode === "pomodoro" && entry.pomodoroCycles !== undefined ? ` (${entry.pomodoroCycles} focus blocks)` : "";
+  return `${label}${cycles}${project}: ${formatReadableDuration(entry.durationMs)}`;
+}
+
+export function buildSessionLog(timer: ActiveTimer, endedAt: number): SessionLog {
+  return {
+    id: `${timer.id}-${endedAt}`,
+    title: timer.title,
+    project: timer.project,
+    startedAt: timer.createdAt,
+    endedAt,
+    durationMs: Math.max(0, endedAt - timer.createdAt - (timer.sessionPausedMs ?? 0)),
+    mode: timer.mode,
+    pomodoroCycles: timer.pomodoro?.completedFocusBlocks,
+  };
+}
+
+export async function startTimer(payload: StartTimerPayload): Promise<ActiveTimer> {
+  const existing = await getActiveTimer();
+  if (existing) {
+    throw new Error("ACTIVE_TIMER_EXISTS");
+  }
+  const timer = createActiveTimer(payload);
+  await setActiveTimer(timer);
+  return timer;
+}
+
+export async function stopTimer(
+  existingTimer?: ActiveTimer | null,
+  historyOverride?: SessionLog[],
+): Promise<{ entry: SessionLog; history: SessionLog[] }> {
+  const timer = existingTimer ?? (await getActiveTimer());
+  if (!timer) {
+    throw new Error("NO_ACTIVE_TIMER");
+  }
+  const currentHistory = historyOverride ?? (await getHistory());
+  const entry = buildSessionLog(timer, Date.now());
+  const history = [entry, ...currentHistory].slice(0, MAX_HISTORY_ITEMS);
+  await Promise.all([setActiveTimer(null), setHistory(history)]);
+  return { entry, history };
+}
+
+export function listProjects(history: SessionLog[]): string[] {
+  const items = new Set(history.map((entry) => entry.project).filter(Boolean) as string[]);
+  return Array.from(items).sort((a, b) => a.localeCompare(b));
+}
+
+export function createActiveTimer(payload: StartTimerPayload): ActiveTimer {
+  const now = Date.now();
+  const title = sanitizeTitle(payload.title, payload.mode);
+  const project = sanitizeProject(payload.project);
+
+  const timer: ActiveTimer = {
+    id: randomUUID(),
+    title,
+    project,
+    createdAt: now,
+    startedAt: now,
+    mode: payload.mode,
+    isPaused: false,
+    pausedAt: undefined,
+    sessionPausedMs: 0,
+    phasePausedMs: 0,
+  };
+
+  if (payload.mode === "open" && payload.targetDurationMinutes) {
+    timer.targetDurationMs = Math.round(payload.targetDurationMinutes * 60 * 1000);
+  }
+
+  if (payload.mode === "pomodoro" && payload.pomodoro) {
+    timer.pomodoro = {
+      focusDurationMs: payload.pomodoro.focusMinutes * 60 * 1000,
+      breakDurationMs: payload.pomodoro.breakMinutes * 60 * 1000,
+      cycles: payload.pomodoro.cycles,
+      completedFocusBlocks: 0,
+      phase: "focus",
+    };
+  }
+
+  return timer;
+}
+
+export function safeParse<T>(value: string): T | null {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function pauseActiveTimer(): Promise<ActiveTimer> {
+  const timer = await getActiveTimer();
+  if (!timer) {
+    throw new Error("NO_ACTIVE_TIMER");
+  }
+  if (timer.isPaused) {
+    throw new Error("ALREADY_PAUSED");
+  }
+  const updated: ActiveTimer = { ...timer, isPaused: true, pausedAt: Date.now() };
+  await setActiveTimer(updated);
+  return updated;
+}
+
+export async function resumeActiveTimer(): Promise<ActiveTimer> {
+  const timer = await getActiveTimer();
+  if (!timer) {
+    throw new Error("NO_ACTIVE_TIMER");
+  }
+  if (!timer.isPaused || !timer.pausedAt) {
+    throw new Error("NOT_PAUSED");
+  }
+  const delta = Date.now() - timer.pausedAt;
+  const updated: ActiveTimer = {
+    ...timer,
+    isPaused: false,
+    pausedAt: undefined,
+    sessionPausedMs: (timer.sessionPausedMs ?? 0) + delta,
+    phasePausedMs: (timer.phasePausedMs ?? 0) + delta,
+  };
+  await setActiveTimer(updated);
+  return updated;
+}
+
+// Project Appearance (emoji/color)
+export interface ProjectMeta {
+  emoji?: string;
+  color?: string; // Raycast Color name or hex
+}
+
+export async function getProjectMetaMap(): Promise<Record<string, ProjectMeta>> {
+  const raw = await LocalStorage.getItem<string>(`${STORAGE_KEYS.HISTORY}-project-meta`);
+  if (!raw) return {};
+  const parsed = safeParse<Record<string, ProjectMeta>>(raw);
+  return parsed ?? {};
+}
+
+export async function setProjectMeta(project: string, meta: ProjectMeta): Promise<void> {
+  const map = await getProjectMetaMap();
+  map[project] = { ...map[project], ...meta };
+  await LocalStorage.setItem(`${STORAGE_KEYS.HISTORY}-project-meta`, JSON.stringify(map));
+}
+
+export async function getProjectMeta(project?: string): Promise<ProjectMeta | undefined> {
+  if (!project) return undefined;
+  const map = await getProjectMetaMap();
+  return map[project];
+}
+
+function sanitizeTitle(title: string | undefined, mode: TimerMode): string {
+  const fallback = mode === "pomodoro" ? "Pomodoro" : "Working Session";
+  return (title?.trim() || fallback).slice(0, 60);
+}
+
+export function sanitizeProject(project?: string): string | undefined {
+  const trimmed = project?.trim();
+  return trimmed ? trimmed.slice(0, 60) : undefined;
+}
