@@ -1,5 +1,21 @@
 import { LocalStorage } from "@raycast/api";
 import { randomUUID } from "node:crypto";
+import { exec } from "node:child_process";
+
+// macOS system sounds for notifications
+export const SOUNDS = {
+  focusComplete: "/System/Library/Sounds/Glass.aiff",
+  breakComplete: "/System/Library/Sounds/Hero.aiff",
+  pomodoroComplete: "/System/Library/Sounds/Funk.aiff",
+} as const;
+
+export function playSound(soundPath: string): void {
+  exec(`afplay "${soundPath}"`, (error) => {
+    if (error) {
+      console.error("Failed to play sound:", error);
+    }
+  });
+}
 
 export const STORAGE_KEYS = {
   ACTIVE: "better-time-log/active-timer",
@@ -337,7 +353,7 @@ export interface PomodoroAdvanceResult {
  */
 export async function advancePomodoroPhase(
   timer: ActiveTimer,
-  options?: { skip?: boolean },
+  options?: { skip?: boolean; playSound?: boolean },
 ): Promise<PomodoroAdvanceResult> {
   if (!timer.pomodoro) {
     throw new Error("NOT_A_POMODORO");
@@ -345,6 +361,7 @@ export async function advancePomodoroPhase(
 
   const pomodoro = timer.pomodoro;
   const now = Date.now();
+  const shouldPlaySound = options?.playSound !== false && !options?.skip;
 
   if (pomodoro.phase === "focus") {
     const completedFocusBlocks = pomodoro.completedFocusBlocks + 1;
@@ -357,6 +374,9 @@ export async function advancePomodoroPhase(
         pomodoro: { ...pomodoro, completedFocusBlocks },
       };
       await stopTimer(finishedTimer);
+      if (shouldPlaySound) {
+        playSound(SOUNDS.pomodoroComplete);
+      }
       return {
         action: "completed",
         timer: null,
@@ -373,6 +393,9 @@ export async function advancePomodoroPhase(
       pomodoro: { ...pomodoro, completedFocusBlocks, phase: "break" },
     };
     await setActiveTimer(updated);
+    if (shouldPlaySound) {
+      playSound(SOUNDS.focusComplete);
+    }
     return {
       action: "to-break",
       timer: updated,
@@ -389,6 +412,9 @@ export async function advancePomodoroPhase(
     pomodoro: { ...pomodoro, phase: "focus" },
   };
   await setActiveTimer(updated);
+  if (shouldPlaySound) {
+    playSound(SOUNDS.breakComplete);
+  }
   return {
     action: "to-focus",
     timer: updated,
