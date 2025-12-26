@@ -114,7 +114,11 @@ export async function setHistory(history: SessionLog[]): Promise<void> {
   await LocalStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
 }
 
-export async function updateSessionProject(sessionId: string, project?: string, tags?: string[]): Promise<SessionLog[]> {
+export async function updateSessionProject(
+  sessionId: string,
+  project?: string,
+  tags?: string[],
+): Promise<SessionLog[]> {
   const history = await getHistory();
   const index = history.findIndex((s) => s.id === sessionId);
   if (index === -1) {
@@ -572,4 +576,3 @@ export function exportToJSON(sessions: SessionLog[]): string {
 
   return JSON.stringify(data, null, 2);
 }
-

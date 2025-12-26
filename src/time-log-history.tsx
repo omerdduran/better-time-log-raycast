@@ -1,4 +1,16 @@
-import { Action, ActionPanel, Alert, Color, Form, Icon, List, Toast, confirmAlert, showToast, useNavigation } from "@raycast/api";
+import {
+  Action,
+  ActionPanel,
+  Alert,
+  Color,
+  Form,
+  Icon,
+  List,
+  Toast,
+  confirmAlert,
+  showToast,
+  useNavigation,
+} from "@raycast/api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { refreshMenuBarCommand } from "./lib/menu-bar";
 import {
@@ -35,9 +47,7 @@ function EditSessionProjectForm({
   };
 
   // Combine existing projects with custom typed project
-  const allProjects = customProject && !projects.includes(customProject)
-    ? [customProject, ...projects]
-    : projects;
+  const allProjects = customProject && !projects.includes(customProject) ? [customProject, ...projects] : projects;
 
   return (
     <Form
@@ -198,13 +208,13 @@ export default function TimeLogHistoryCommand() {
           accessories={
             filteredHistory.length
               ? [
-                {
-                  tag: {
-                    value: formatReadableDuration(totalDuration),
-                    color: Color.Blue,
+                  {
+                    tag: {
+                      value: formatReadableDuration(totalDuration),
+                      color: Color.Blue,
+                    },
                   },
-                },
-              ]
+                ]
               : undefined
           }
         />
@@ -234,7 +244,13 @@ export default function TimeLogHistoryCommand() {
                   <Action.Push
                     title="Edit Project"
                     icon={Icon.Pencil}
-                    target={<EditSessionProjectForm session={entry} onUpdate={handleUpdateSessionProject} projects={projectOptions} />}
+                    target={
+                      <EditSessionProjectForm
+                        session={entry}
+                        onUpdate={handleUpdateSessionProject}
+                        projects={projectOptions}
+                      />
+                    }
                   />
                   <Action.CopyToClipboard title="Copy Summary" content={buildSummary(entry)} />
                   {entry.project && (

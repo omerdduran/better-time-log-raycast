@@ -1,8 +1,5 @@
 import {
-  Action,
-  ActionPanel,
   Alert,
-  Color,
   Icon,
   LaunchType,
   MenuBarExtra,
@@ -18,19 +15,15 @@ import {
   SessionLog,
   StartTimerPayload,
   advancePomodoroPhase,
-  buildSummary,
   formatClock,
   formatReadableDuration,
   getActiveTimer,
   getHistory,
-  sanitizeProject,
   setActiveTimer as persistActiveTimer,
   setHistory as persistHistory,
   startTimer as persistStartTimer,
   stopTimer as persistStopTimer,
 } from "./lib/timer-store";
-import { TimerForm } from "./components/timer-form";
-import { ProjectForm } from "./components/project-form";
 
 export default function MenuBarTimerCommand() {
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
@@ -186,21 +179,6 @@ export default function MenuBarTimerCommand() {
     }
   }, [activeTimer]);
 
-  const handleAssignProject = useCallback(
-    async (nextProject?: string) => {
-      if (!activeTimer) {
-        return;
-      }
-      const sanitized = sanitizeProject(nextProject);
-      setActiveTimer({ ...activeTimer, project: sanitized });
-      await showToast({
-        style: Toast.Style.Success,
-        title: sanitized ? `Project set to ${sanitized}` : "Project cleared",
-      });
-    },
-    [activeTimer],
-  );
-
   const handleCancelTimer = useCallback(async () => {
     if (!activeTimer) {
       return;
@@ -242,11 +220,7 @@ export default function MenuBarTimerCommand() {
               icon={activeTimer.mode === "pomodoro" ? Icon.Clock : Icon.Clock}
               tooltip={buildActiveTimerTooltip(activeTimer, tick)}
             />
-            <MenuBarExtra.Item
-              title="Stop Timer"
-              icon={Icon.Stop}
-              onAction={handleStopTimer}
-            />
+            <MenuBarExtra.Item title="Stop Timer" icon={Icon.Stop} onAction={handleStopTimer} />
             <MenuBarExtra.Item
               title={activeTimer.isPaused ? "Resume Timer" : "Pause Timer"}
               icon={activeTimer.isPaused ? Icon.Play : Icon.Pause}
@@ -264,11 +238,7 @@ export default function MenuBarTimerCommand() {
               icon={Icon.Hashtag}
               onAction={() => launchCommand({ name: "assign-project", type: LaunchType.UserInitiated })}
             />
-            <MenuBarExtra.Item
-              title="Cancel Timer (No Log)"
-              icon={Icon.XMarkCircle}
-              onAction={handleCancelTimer}
-            />
+            <MenuBarExtra.Item title="Cancel Timer (No Log)" icon={Icon.XMarkCircle} onAction={handleCancelTimer} />
           </>
         ) : (
           <MenuBarExtra.Item title="No running timer" subtitle="Start one below" icon={Icon.Clock} />

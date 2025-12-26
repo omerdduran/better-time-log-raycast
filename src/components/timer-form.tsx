@@ -10,7 +10,13 @@ interface TimerFormProps {
   tags?: string[];
 }
 
-export function TimerForm({ onCreate, autoClose = true, initialMode = "open", projects = [], tags = [] }: TimerFormProps) {
+export function TimerForm({
+  onCreate,
+  autoClose = true,
+  initialMode = "open",
+  projects = [],
+  tags = [],
+}: TimerFormProps) {
   const { pop } = useNavigation();
   const [mode, setMode] = useState<TimerMode>(initialMode);
   const [customProject, setCustomProject] = useState<string>("");
@@ -68,12 +74,11 @@ export function TimerForm({ onCreate, autoClose = true, initialMode = "open", pr
   };
 
   // Combine existing projects with custom typed project
-  const allProjects = customProject && !projects.includes(customProject)
-    ? [customProject, ...projects]
-    : projects;
+  const allProjects = customProject && !projects.includes(customProject) ? [customProject, ...projects] : projects;
 
   // Format existing tags as suggestions
-  const tagSuggestions = tags.length > 0 ? `Existing: ${tags.slice(0, 5).join(", ")}` : "e.g. meeting, coding, research";
+  const tagSuggestions =
+    tags.length > 0 ? `Existing: ${tags.slice(0, 5).join(", ")}` : "e.g. meeting, coding, research";
 
   return (
     <Form

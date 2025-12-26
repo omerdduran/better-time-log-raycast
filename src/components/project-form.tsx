@@ -24,9 +24,7 @@ export function ProjectForm({
   };
 
   // Combine existing projects with custom typed project
-  const allProjects = customProject && !projects.includes(customProject)
-    ? [customProject, ...projects]
-    : projects;
+  const allProjects = customProject && !projects.includes(customProject) ? [customProject, ...projects] : projects;
 
   return (
     <Form
