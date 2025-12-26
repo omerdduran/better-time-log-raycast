@@ -295,7 +295,7 @@ export default function MenuBarTimerCommand() {
         <MenuBarExtra.Item
           title="25/5 Pomodoro"
           subtitle="4 focus blocks"
-          icon={Icon.Timer}
+          icon={Icon.Clock}
           onAction={() =>
             handleStartTimer({
               mode: "pomodoro",
@@ -311,7 +311,7 @@ export default function MenuBarTimerCommand() {
         <MenuBarExtra.Item
           title="50/10 Deep Work"
           subtitle="2 blocks"
-          icon={Icon.Timer}
+          icon={Icon.Clock}
           onAction={() =>
             handleStartTimer({
               mode: "pomodoro",
