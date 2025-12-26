@@ -4,9 +4,11 @@ import {
   Alert,
   Color,
   Icon,
+  LaunchType,
   MenuBarExtra,
   Toast,
   confirmAlert,
+  launchCommand,
   showHUD,
   showToast,
 } from "@raycast/api";
@@ -286,21 +288,20 @@ export default function MenuBarTimerCommand() {
         ) : (
           <MenuBarExtra.Item title="No running timer" subtitle="Start one below" icon={Icon.Clock} />
         )}
+        {activeTimer?.mode === "pomodoro" && activeTimer.pomodoro && (
+          <MenuBarExtra.Item
+            title={activeTimer.pomodoro.phase === "focus" ? "Skip to Break" : "Skip to Focus"}
+            icon={Icon.Forward}
+            onAction={handleSkipPhase}
+          />
+        )}
       </MenuBarExtra.Section>
 
       <MenuBarExtra.Section title="Quick Start">
         <MenuBarExtra.Item
           title="Start Timer…"
           icon={Icon.Plus}
-          actions={
-            <ActionPanel>
-              <Action.Push
-                icon={Icon.Plus}
-                title="Open Timer Form"
-                target={<TimerForm onCreate={handleStartTimer} />}
-              />
-            </ActionPanel>
-          }
+          onAction={() => launchCommand({ name: "start-timer", type: LaunchType.UserInitiated })}
         />
         <MenuBarExtra.Item
           title="Instant Timer"
