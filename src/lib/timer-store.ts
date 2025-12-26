@@ -39,6 +39,7 @@ export interface ActiveTimer {
   id: string;
   title: string;
   project?: string;
+  tags?: string[];
   createdAt: number;
   startedAt: number;
   mode: TimerMode;
@@ -55,6 +56,7 @@ export interface SessionLog {
   id: string;
   title: string;
   project?: string;
+  tags?: string[];
   startedAt: number;
   endedAt: number;
   durationMs: number;
@@ -65,6 +67,7 @@ export interface SessionLog {
 export interface StartTimerPayload {
   title?: string;
   project?: string;
+  tags?: string[];
   mode: TimerMode;
   targetDurationMinutes?: number;
   pomodoro?: {
@@ -111,13 +114,17 @@ export async function setHistory(history: SessionLog[]): Promise<void> {
   await LocalStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
 }
 
-export async function updateSessionProject(sessionId: string, project?: string): Promise<SessionLog[]> {
+export async function updateSessionProject(sessionId: string, project?: string, tags?: string[]): Promise<SessionLog[]> {
   const history = await getHistory();
   const index = history.findIndex((s) => s.id === sessionId);
   if (index === -1) {
     throw new Error("SESSION_NOT_FOUND");
   }
-  history[index] = { ...history[index], project: sanitizeProject(project) };
+  history[index] = {
+    ...history[index],
+    project: sanitizeProject(project),
+    tags: sanitizeTags(tags),
+  };
   await setHistory(history);
   return history;
 }
@@ -188,6 +195,7 @@ export function buildSessionLog(timer: ActiveTimer, endedAt: number): SessionLog
     id: `${timer.id}-${endedAt}`,
     title: timer.title,
     project: timer.project,
+    tags: timer.tags,
     startedAt: timer.createdAt,
     endedAt,
     durationMs: Math.max(0, endedAt - timer.createdAt - (timer.sessionPausedMs ?? 0)),
@@ -230,11 +238,13 @@ export function createActiveTimer(payload: StartTimerPayload): ActiveTimer {
   const now = Date.now();
   const title = sanitizeTitle(payload.title, payload.mode);
   const project = sanitizeProject(payload.project);
+  const tags = sanitizeTags(payload.tags);
 
   const timer: ActiveTimer = {
     id: randomUUID(),
     title,
     project,
+    tags,
     createdAt: now,
     startedAt: now,
     mode: payload.mode,
@@ -335,6 +345,29 @@ function sanitizeTitle(title: string | undefined, mode: TimerMode): string {
 export function sanitizeProject(project?: string): string | undefined {
   const trimmed = project?.trim();
   return trimmed ? trimmed.slice(0, 60) : undefined;
+}
+
+export function sanitizeTags(tags?: string[]): string[] | undefined {
+  if (!tags || tags.length === 0) return undefined;
+
+  const cleaned = tags
+    .map((tag) => {
+      const trimmed = tag.trim().toLowerCase();
+      // Ensure tag starts with # and is cleaned
+      const normalized = trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
+      return normalized.slice(0, 30);
+    })
+    .filter((tag) => tag.length > 1); // Must have more than just #
+
+  // Remove duplicates and limit to 10 tags
+  const unique = [...new Set(cleaned)].slice(0, 10);
+  return unique.length > 0 ? unique : undefined;
+}
+
+export function listTags(history: SessionLog[]): string[] {
+  const allTags = history.flatMap((entry) => entry.tags || []);
+  const unique = new Set(allTags);
+  return Array.from(unique).sort((a, b) => a.localeCompare(b));
 }
 
 // Pomodoro phase advancement result

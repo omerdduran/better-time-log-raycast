@@ -227,6 +227,7 @@ export default function TimeLogHistoryCommand() {
                   tooltip: `${new Date(entry.startedAt).toLocaleString()} → ${new Date(entry.endedAt).toLocaleTimeString()}`,
                 },
                 { tag: entry.mode === "pomodoro" ? "Pomodoro" : "Timer" },
+                ...(entry.tags?.map((t) => ({ tag: { value: t, color: Color.Purple } })) || []),
               ]}
               actions={
                 <ActionPanel>

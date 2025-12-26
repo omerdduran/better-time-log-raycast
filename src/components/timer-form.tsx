@@ -7,19 +7,29 @@ interface TimerFormProps {
   autoClose?: boolean;
   initialMode?: TimerMode;
   projects?: string[];
+  tags?: string[];
 }
 
-export function TimerForm({ onCreate, autoClose = true, initialMode = "open", projects = [] }: TimerFormProps) {
+export function TimerForm({ onCreate, autoClose = true, initialMode = "open", projects = [], tags = [] }: TimerFormProps) {
   const { pop } = useNavigation();
   const [mode, setMode] = useState<TimerMode>(initialMode);
   const [customProject, setCustomProject] = useState<string>("");
 
   const handleSubmit = async (values: Record<string, string | number | undefined>) => {
     const timerMode = (values.mode as TimerMode) || "open";
+
+    // Parse tags from comma-separated string
+    const tagsInput = typeof values.tags === "string" ? values.tags : "";
+    const parsedTags = tagsInput
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+
     const payload: StartTimerPayload = {
       mode: timerMode,
       title: typeof values.title === "string" ? values.title : undefined,
       project: typeof values.project === "string" && values.project !== "" ? values.project : undefined,
+      tags: parsedTags.length > 0 ? parsedTags : undefined,
     };
 
     if (timerMode === "open") {
@@ -62,6 +72,9 @@ export function TimerForm({ onCreate, autoClose = true, initialMode = "open", pr
     ? [customProject, ...projects]
     : projects;
 
+  // Format existing tags as suggestions
+  const tagSuggestions = tags.length > 0 ? `Existing: ${tags.slice(0, 5).join(", ")}` : "e.g. meeting, coding, research";
+
   return (
     <Form
       navigationTitle="Start Timer"
@@ -84,6 +97,12 @@ export function TimerForm({ onCreate, autoClose = true, initialMode = "open", pr
           <Form.Dropdown.Item key={p} title={p} value={p} />
         ))}
       </Form.Dropdown>
+      <Form.TextField
+        id="tags"
+        title="Tags"
+        placeholder={tagSuggestions}
+        info="Comma-separated, e.g. meeting, coding"
+      />
       <Form.Dropdown id="mode" title="Timer Type" value={mode} onChange={(value) => setMode(value as TimerMode)}>
         <Form.Dropdown.Item title="Open Timer" value="open" />
         <Form.Dropdown.Item title="Pomodoro" value="pomodoro" />
