@@ -1,7 +1,7 @@
 import { Action, ActionPanel, Form, LaunchProps, Toast, popToRoot, showToast } from "@raycast/api";
 import { useEffect, useState } from "react";
 import { refreshMenuBarCommand } from "./lib/menu-bar";
-import { SessionLog, getHistory, updateSessionProject } from "./lib/timer-store";
+import { SessionLog, getHistory, listProjects, updateSessionProject } from "./lib/timer-store";
 
 interface EditSessionArguments {
     sessionId: string;
@@ -10,6 +10,8 @@ interface EditSessionArguments {
 export default function EditSessionCommand(props: LaunchProps<{ arguments: EditSessionArguments }>) {
     const { sessionId } = props.arguments;
     const [session, setSession] = useState<SessionLog | null>(null);
+    const [projects, setProjects] = useState<string[]>([]);
+    const [customProject, setCustomProject] = useState<string>("");
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
@@ -19,6 +21,7 @@ export default function EditSessionCommand(props: LaunchProps<{ arguments: EditS
                 const found = history.find((s) => s.id === sessionId);
                 if (found) {
                     setSession(found);
+                    setProjects(listProjects(history));
                 } else {
                     await showToast({ style: Toast.Style.Failure, title: "Session not found" });
                     await popToRoot();
@@ -31,11 +34,12 @@ export default function EditSessionCommand(props: LaunchProps<{ arguments: EditS
 
     const handleSubmit = async (values: { project?: string }) => {
         if (!session) return;
+        const project = values.project === "" ? undefined : values.project;
         try {
-            await updateSessionProject(session.id, values.project);
+            await updateSessionProject(session.id, project);
             await showToast({
                 style: Toast.Style.Success,
-                title: values.project ? `Project set to ${values.project}` : "Project cleared",
+                title: project ? `Project set to ${project}` : "Project cleared",
             });
             await refreshMenuBarCommand();
             await popToRoot();
@@ -43,6 +47,11 @@ export default function EditSessionCommand(props: LaunchProps<{ arguments: EditS
             await showToast({ style: Toast.Style.Failure, title: "Failed to update", message: String(error) });
         }
     };
+
+    // Combine existing projects with custom typed project
+    const allProjects = customProject && !projects.includes(customProject)
+        ? [customProject, ...projects]
+        : projects;
 
     if (isLoading || !session) {
         return (
@@ -62,12 +71,18 @@ export default function EditSessionCommand(props: LaunchProps<{ arguments: EditS
             }
         >
             <Form.Description text={`Editing: ${session.title || "Logged Session"}`} />
-            <Form.TextField
+            <Form.Dropdown
                 id="project"
                 title="Project"
                 defaultValue={session.project ?? ""}
-                placeholder="e.g. Marketing Site"
-            />
+                filtering={false}
+                onSearchTextChange={setCustomProject}
+            >
+                <Form.Dropdown.Item title="No Project" value="" />
+                {allProjects.map((p) => (
+                    <Form.Dropdown.Item key={p} title={p} value={p} />
+                ))}
+            </Form.Dropdown>
         </Form>
     );
 }
