@@ -1,18 +1,53 @@
-import { Action, ActionPanel, Color, Icon, List, Toast, showToast } from "@raycast/api";
+import { Action, ActionPanel, Alert, Color, Form, Icon, List, Toast, confirmAlert, showToast, useNavigation } from "@raycast/api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { refreshMenuBarCommand } from "./lib/menu-bar";
 import {
   SessionLog,
   StartTimerPayload,
   buildSummary,
+  deleteSession,
   formatReadableDuration,
   getHistory,
   getProjectMetaMap,
   listProjects,
   startTimer as persistStartTimer,
+  updateSessionProject,
 } from "./lib/timer-store";
 
 type ProjectFilterValue = "all" | "none" | string;
+
+function EditSessionProjectForm({
+  session,
+  onUpdate,
+}: {
+  session: SessionLog;
+  onUpdate: (sessionId: string, project?: string) => Promise<void>;
+}) {
+  const { pop } = useNavigation();
+
+  const handleSubmit = async (values: { project?: string }) => {
+    await onUpdate(session.id, values.project);
+    pop();
+  };
+
+  return (
+    <Form
+      navigationTitle="Edit Session"
+      actions={
+        <ActionPanel>
+          <Action.SubmitForm title="Save" onSubmit={handleSubmit} />
+        </ActionPanel>
+      }
+    >
+      <Form.TextField
+        id="project"
+        title="Project"
+        defaultValue={session.project ?? ""}
+        placeholder="e.g. Marketing Site"
+      />
+    </Form>
+  );
+}
 
 export default function TimeLogHistoryCommand() {
   const [history, setHistory] = useState<SessionLog[]>([]);
@@ -86,6 +121,40 @@ export default function TimeLogHistoryCommand() {
     }
   }, []);
 
+  const handleUpdateSessionProject = useCallback(async (sessionId: string, project?: string) => {
+    try {
+      const updatedHistory = await updateSessionProject(sessionId, project);
+      setHistory(updatedHistory);
+      await showToast({
+        style: Toast.Style.Success,
+        title: project ? `Project set to ${project}` : "Project cleared",
+      });
+    } catch (error) {
+      await showToast({ style: Toast.Style.Failure, title: "Failed to update session", message: String(error) });
+    }
+  }, []);
+
+  const handleDeleteSession = useCallback(async (session: SessionLog) => {
+    const confirmed = await confirmAlert({
+      title: "Delete Session?",
+      message: `"${session.title || "Logged Session"}" will be permanently removed.`,
+      primaryAction: {
+        title: "Delete",
+        style: Alert.ActionStyle.Destructive,
+      },
+    });
+    if (!confirmed) return;
+
+    try {
+      const updatedHistory = await deleteSession(session.id);
+      setHistory(updatedHistory);
+      await refreshMenuBarCommand();
+      await showToast({ style: Toast.Style.Success, title: "Session deleted" });
+    } catch (error) {
+      await showToast({ style: Toast.Style.Failure, title: "Failed to delete", message: String(error) });
+    }
+  }, []);
+
   return (
     <List
       isLoading={isLoading}
@@ -114,13 +183,13 @@ export default function TimeLogHistoryCommand() {
           accessories={
             filteredHistory.length
               ? [
-                  {
-                    tag: {
-                      value: formatReadableDuration(totalDuration),
-                      color: Color.Blue,
-                    },
+                {
+                  tag: {
+                    value: formatReadableDuration(totalDuration),
+                    color: Color.Blue,
                   },
-                ]
+                },
+              ]
               : undefined
           }
         />
@@ -146,12 +215,17 @@ export default function TimeLogHistoryCommand() {
               ]}
               actions={
                 <ActionPanel>
+                  <Action.Push
+                    title="Edit Project"
+                    icon={Icon.Pencil}
+                    target={<EditSessionProjectForm session={entry} onUpdate={handleUpdateSessionProject} />}
+                  />
                   <Action.CopyToClipboard title="Copy Summary" content={buildSummary(entry)} />
                   {entry.project && (
                     <Action
                       title="Filter by Project"
                       icon={Icon.List}
-                      onAction={() => setProjectFilter(entry.project)}
+                      onAction={() => setProjectFilter(entry.project!)}
                     />
                   )}
                   {entry.project && (
@@ -159,7 +233,7 @@ export default function TimeLogHistoryCommand() {
                       title="Start Timer for Project"
                       icon={Icon.Play}
                       onAction={() => {
-                        void handleStartTimerForProject(entry.project);
+                        void handleStartTimerForProject(entry.project!);
                       }}
                     />
                   )}
@@ -170,6 +244,15 @@ export default function TimeLogHistoryCommand() {
                       void loadHistory();
                     }}
                     shortcut={{ modifiers: ["cmd"], key: "r" }}
+                  />
+                  <Action
+                    title="Delete Session"
+                    icon={Icon.Trash}
+                    style={Action.Style.Destructive}
+                    onAction={() => {
+                      void handleDeleteSession(entry);
+                    }}
+                    shortcut={{ modifiers: ["cmd"], key: "backspace" }}
                   />
                 </ActionPanel>
               }

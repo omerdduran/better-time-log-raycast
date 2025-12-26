@@ -235,65 +235,43 @@ export default function MenuBarTimerCommand() {
     <MenuBarExtra icon={{ source: "extension-icon.png" }} isLoading={isLoading} title={menuTitle} tooltip={menuTooltip}>
       <MenuBarExtra.Section title="Active Timer">
         {activeTimer ? (
-          <MenuBarExtra.Item
-            title={activeTimer.title || "Current Session"}
-            subtitle={activeTimer.project ? `${activeTimer.project}` : "No project"}
-            icon={activeTimer.mode === "pomodoro" ? Icon.Timer : Icon.Clock}
-            accessory={
-              activeTimer.mode === "pomodoro" && activeTimer.pomodoro
-                ? {
-                  tag: {
-                    value: `${activeTimer.pomodoro.completedFocusBlocks}/${activeTimer.pomodoro.cycles}`,
-                    color: Color.Green,
-                  },
-                }
-                : undefined
-            }
-            tooltip={buildActiveTimerTooltip(activeTimer, tick)}
-            actions={
-              <ActionPanel>
-                <Action icon={Icon.Stop} title="Stop Timer" onAction={handleStopTimer} />
-                <Action
-                  icon={activeTimer.isPaused ? Icon.Play : Icon.Pause}
-                  title={activeTimer.isPaused ? "Resume Timer" : "Pause Timer"}
-                  onAction={handlePauseResume}
-                />
-                {activeTimer.mode === "pomodoro" && activeTimer.pomodoro && (
-                  <Action
-                    icon={Icon.Forward}
-                    title={activeTimer.pomodoro.phase === "focus" ? "Skip to Break" : "Skip to Focus"}
-                    onAction={handleSkipPhase}
-                  />
-                )}
-                <Action.Push
-                  icon={Icon.Hashtag}
-                  title="Assign Project"
-                  target={
-                    <ProjectForm
-                      initialProject={activeTimer.project}
-                      onSubmit={handleAssignProject}
-                      navigationTitle="Assign Project"
-                    />
-                  }
-                />
-                <Action
-                  icon={Icon.XMarkCircle}
-                  title="Cancel Timer (No Log)"
-                  style={Action.Style.Destructive}
-                  onAction={handleCancelTimer}
-                />
-              </ActionPanel>
-            }
-          />
+          <>
+            <MenuBarExtra.Item
+              title={activeTimer.title || "Current Session"}
+              subtitle={activeTimer.project ? `${activeTimer.project}` : "No project"}
+              icon={activeTimer.mode === "pomodoro" ? Icon.Clock : Icon.Clock}
+              tooltip={buildActiveTimerTooltip(activeTimer, tick)}
+            />
+            <MenuBarExtra.Item
+              title="Stop Timer"
+              icon={Icon.Stop}
+              onAction={handleStopTimer}
+            />
+            <MenuBarExtra.Item
+              title={activeTimer.isPaused ? "Resume Timer" : "Pause Timer"}
+              icon={activeTimer.isPaused ? Icon.Play : Icon.Pause}
+              onAction={handlePauseResume}
+            />
+            {activeTimer.mode === "pomodoro" && activeTimer.pomodoro && (
+              <MenuBarExtra.Item
+                title={activeTimer.pomodoro.phase === "focus" ? "Skip to Break" : "Skip to Focus"}
+                icon={Icon.Forward}
+                onAction={handleSkipPhase}
+              />
+            )}
+            <MenuBarExtra.Item
+              title="Assign Project"
+              icon={Icon.Hashtag}
+              onAction={() => launchCommand({ name: "assign-project", type: LaunchType.UserInitiated })}
+            />
+            <MenuBarExtra.Item
+              title="Cancel Timer (No Log)"
+              icon={Icon.XMarkCircle}
+              onAction={handleCancelTimer}
+            />
+          </>
         ) : (
           <MenuBarExtra.Item title="No running timer" subtitle="Start one below" icon={Icon.Clock} />
-        )}
-        {activeTimer?.mode === "pomodoro" && activeTimer.pomodoro && (
-          <MenuBarExtra.Item
-            title={activeTimer.pomodoro.phase === "focus" ? "Skip to Break" : "Skip to Focus"}
-            icon={Icon.Forward}
-            onAction={handleSkipPhase}
-          />
         )}
       </MenuBarExtra.Section>
 
@@ -358,20 +336,25 @@ export default function MenuBarTimerCommand() {
             title={session.title || "Logged Session"}
             subtitle={[formatReadableDuration(session.durationMs), session.project].filter(Boolean).join(" · ")}
             tooltip={`${new Date(session.startedAt).toLocaleString()} → ${new Date(session.endedAt).toLocaleTimeString()}`}
-            icon={session.mode === "pomodoro" ? Icon.Timer : Icon.Clock}
-            actions={
-              <ActionPanel>
-                <Action.CopyToClipboard
-                  title="Copy Summary"
-                  content={buildSummary(session)}
-                  shortcut={{ modifiers: ["cmd"], key: "c" }}
-                />
-              </ActionPanel>
+            icon={session.mode === "pomodoro" ? Icon.Clock : Icon.Clock}
+            onAction={() =>
+              launchCommand({
+                name: "edit-session",
+                type: LaunchType.UserInitiated,
+                arguments: { sessionId: session.id },
+              })
             }
           />
         ))}
         {history.length > 0 && (
-          <MenuBarExtra.Item title="Clear History" icon={Icon.Trash} onAction={handleClearHistory} />
+          <>
+            <MenuBarExtra.Item
+              title="View All History"
+              icon={Icon.List}
+              onAction={() => launchCommand({ name: "time-log-history", type: LaunchType.UserInitiated })}
+            />
+            <MenuBarExtra.Item title="Clear History" icon={Icon.Trash} onAction={handleClearHistory} />
+          </>
         )}
       </MenuBarExtra.Section>
     </MenuBarExtra>

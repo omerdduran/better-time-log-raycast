@@ -95,6 +95,27 @@ export async function setHistory(history: SessionLog[]): Promise<void> {
   await LocalStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
 }
 
+export async function updateSessionProject(sessionId: string, project?: string): Promise<SessionLog[]> {
+  const history = await getHistory();
+  const index = history.findIndex((s) => s.id === sessionId);
+  if (index === -1) {
+    throw new Error("SESSION_NOT_FOUND");
+  }
+  history[index] = { ...history[index], project: sanitizeProject(project) };
+  await setHistory(history);
+  return history;
+}
+
+export async function deleteSession(sessionId: string): Promise<SessionLog[]> {
+  const history = await getHistory();
+  const filtered = history.filter((s) => s.id !== sessionId);
+  if (filtered.length === history.length) {
+    throw new Error("SESSION_NOT_FOUND");
+  }
+  await setHistory(filtered);
+  return filtered;
+}
+
 export async function assignProjectToActiveTimer(project?: string): Promise<ActiveTimer> {
   const timer = await getActiveTimer();
   if (!timer) {

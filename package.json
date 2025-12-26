@@ -70,6 +70,20 @@
       "title": "Resume Timer",
       "description": "Resume the paused timer",
       "mode": "no-view"
+    },
+    {
+      "name": "edit-session",
+      "title": "Edit Session",
+      "description": "Edit a logged session's project",
+      "mode": "view",
+      "arguments": [
+        {
+          "name": "sessionId",
+          "placeholder": "Session ID",
+          "type": "text",
+          "required": true
+        }
+      ]
     }
   ],
   "dependencies": {
