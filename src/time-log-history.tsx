@@ -19,16 +19,25 @@ type ProjectFilterValue = "all" | "none" | string;
 function EditSessionProjectForm({
   session,
   onUpdate,
+  projects = [],
 }: {
   session: SessionLog;
   onUpdate: (sessionId: string, project?: string) => Promise<void>;
+  projects?: string[];
 }) {
   const { pop } = useNavigation();
+  const [customProject, setCustomProject] = useState<string>("");
 
   const handleSubmit = async (values: { project?: string }) => {
-    await onUpdate(session.id, values.project);
+    const project = values.project === "" ? undefined : values.project;
+    await onUpdate(session.id, project);
     pop();
   };
+
+  // Combine existing projects with custom typed project
+  const allProjects = customProject && !projects.includes(customProject)
+    ? [customProject, ...projects]
+    : projects;
 
   return (
     <Form
@@ -39,12 +48,18 @@ function EditSessionProjectForm({
         </ActionPanel>
       }
     >
-      <Form.TextField
+      <Form.Dropdown
         id="project"
         title="Project"
         defaultValue={session.project ?? ""}
-        placeholder="e.g. Marketing Site"
-      />
+        filtering={false}
+        onSearchTextChange={setCustomProject}
+      >
+        <Form.Dropdown.Item title="No Project" value="" />
+        {allProjects.map((p) => (
+          <Form.Dropdown.Item key={p} title={p} value={p} />
+        ))}
+      </Form.Dropdown>
     </Form>
   );
 }
@@ -218,7 +233,7 @@ export default function TimeLogHistoryCommand() {
                   <Action.Push
                     title="Edit Project"
                     icon={Icon.Pencil}
-                    target={<EditSessionProjectForm session={entry} onUpdate={handleUpdateSessionProject} />}
+                    target={<EditSessionProjectForm session={entry} onUpdate={handleUpdateSessionProject} projects={projectOptions} />}
                   />
                   <Action.CopyToClipboard title="Copy Summary" content={buildSummary(entry)} />
                   {entry.project && (

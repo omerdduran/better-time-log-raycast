@@ -1,10 +1,20 @@
 import { Toast, popToRoot, showToast } from "@raycast/api";
+import { useEffect, useState } from "react";
 import { TimerForm } from "./components/timer-form";
 import { refreshMenuBarCommand } from "./lib/menu-bar";
-import { startTimer as persistStartTimer } from "./lib/timer-store";
+import { getHistory, listProjects, startTimer as persistStartTimer } from "./lib/timer-store";
 import type { StartTimerPayload } from "./lib/timer-store";
 
 export default function StartTimerCommand() {
+  const [projects, setProjects] = useState<string[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const history = await getHistory();
+      setProjects(listProjects(history));
+    })();
+  }, []);
+
   const handleCreate = async (payload: StartTimerPayload) => {
     try {
       const timer = await persistStartTimer(payload);
@@ -20,5 +30,5 @@ export default function StartTimerCommand() {
     }
   };
 
-  return <TimerForm onCreate={handleCreate} autoClose={false} />;
+  return <TimerForm onCreate={handleCreate} autoClose={false} projects={projects} />;
 }

@@ -2,11 +2,12 @@ import { Detail, Toast, showToast } from "@raycast/api";
 import { useEffect, useState } from "react";
 import { ProjectForm } from "./components/project-form";
 import { refreshMenuBarCommand } from "./lib/menu-bar";
-import { assignProjectToActiveTimer, getActiveTimer } from "./lib/timer-store";
+import { assignProjectToActiveTimer, getActiveTimer, getHistory, listProjects } from "./lib/timer-store";
 
 export default function AssignProjectCommand() {
   const [status, setStatus] = useState<"loading" | "ready" | "empty">("loading");
   const [initialProject, setInitialProject] = useState<string | undefined>();
+  const [projects, setProjects] = useState<string[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -17,6 +18,10 @@ export default function AssignProjectCommand() {
         return;
       }
       setInitialProject(timer.project);
+
+      const history = await getHistory();
+      setProjects(listProjects(history));
+
       setStatus("ready");
     })();
   }, []);
@@ -42,5 +47,5 @@ export default function AssignProjectCommand() {
     }
   };
 
-  return <ProjectForm initialProject={initialProject} onSubmit={handleSubmit} />;
+  return <ProjectForm initialProject={initialProject} onSubmit={handleSubmit} projects={projects} />;
 }
