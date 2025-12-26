@@ -83,6 +83,12 @@
           "required": true
         }
       ]
+    },
+    {
+      "name": "time-summary",
+      "title": "Time Summary",
+      "description": "View weekly/monthly summary and export data",
+      "mode": "view"
     }
   ],
   "dependencies": {

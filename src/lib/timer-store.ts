@@ -396,3 +396,121 @@ export async function advancePomodoroPhase(
     subtitle: "Back to focus",
   };
 }
+
+// ========== Date Range Utilities ==========
+
+export type PeriodType = "this-week" | "last-week" | "this-month" | "last-month";
+
+export interface DateRange {
+  start: Date;
+  end: Date;
+  label: string;
+}
+
+export function getWeekRange(offset: number = 0): DateRange {
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + diffToMonday + offset * 7);
+  monday.setHours(0, 0, 0, 0);
+
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23, 59, 59, 999);
+
+  const label = offset === 0 ? "This Week" : offset === -1 ? "Last Week" : `Week ${offset}`;
+  return { start: monday, end: sunday, label };
+}
+
+export function getMonthRange(offset: number = 0): DateRange {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() + offset, 1, 0, 0, 0, 0);
+  const end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0, 23, 59, 59, 999);
+
+  const monthName = start.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const label = offset === 0 ? "This Month" : offset === -1 ? "Last Month" : monthName;
+  return { start, end, label };
+}
+
+export function getPeriodRange(period: PeriodType): DateRange {
+  switch (period) {
+    case "this-week":
+      return getWeekRange(0);
+    case "last-week":
+      return getWeekRange(-1);
+    case "this-month":
+      return getMonthRange(0);
+    case "last-month":
+      return getMonthRange(-1);
+  }
+}
+
+export function filterSessionsByRange(sessions: SessionLog[], range: DateRange): SessionLog[] {
+  return sessions.filter((s) => s.startedAt >= range.start.getTime() && s.startedAt <= range.end.getTime());
+}
+
+export interface ProjectBreakdown {
+  project: string;
+  durationMs: number;
+  sessionCount: number;
+  percentage: number;
+}
+
+export function getProjectBreakdown(sessions: SessionLog[]): ProjectBreakdown[] {
+  const totalMs = sessions.reduce((sum, s) => sum + s.durationMs, 0);
+  const projectMap = new Map<string, { durationMs: number; count: number }>();
+
+  for (const session of sessions) {
+    const key = session.project || "No Project";
+    const existing = projectMap.get(key) || { durationMs: 0, count: 0 };
+    projectMap.set(key, {
+      durationMs: existing.durationMs + session.durationMs,
+      count: existing.count + 1,
+    });
+  }
+
+  const breakdown: ProjectBreakdown[] = [];
+  for (const [project, data] of projectMap.entries()) {
+    breakdown.push({
+      project,
+      durationMs: data.durationMs,
+      sessionCount: data.count,
+      percentage: totalMs > 0 ? Math.round((data.durationMs / totalMs) * 100) : 0,
+    });
+  }
+
+  return breakdown.sort((a, b) => b.durationMs - a.durationMs);
+}
+
+// ========== Export Functions ==========
+
+export function exportToCSV(sessions: SessionLog[]): string {
+  const headers = ["Title", "Project", "Started At", "Ended At", "Duration (min)", "Mode"];
+  const rows = sessions.map((s) => [
+    `"${(s.title || "").replace(/"/g, '""')}"`,
+    `"${(s.project || "").replace(/"/g, '""')}"`,
+    new Date(s.startedAt).toISOString(),
+    new Date(s.endedAt).toISOString(),
+    Math.round(s.durationMs / 60000).toString(),
+    s.mode,
+  ]);
+
+  return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+}
+
+export function exportToJSON(sessions: SessionLog[]): string {
+  const data = sessions.map((s) => ({
+    title: s.title,
+    project: s.project || null,
+    startedAt: new Date(s.startedAt).toISOString(),
+    endedAt: new Date(s.endedAt).toISOString(),
+    durationMinutes: Math.round(s.durationMs / 60000),
+    mode: s.mode,
+    pomodoroCycles: s.pomodoroCycles || null,
+  }));
+
+  return JSON.stringify(data, null, 2);
+}
+
